@@ -1,0 +1,9 @@
+name: "lan-party-tools"
+version: "1.0"
+author: "Stefano Pigozzi <me@steffo.eu>"
+about: "A command line utility to make organizing LAN parties simpler."
+subcommands:
+  - ping:
+      about: "Answers with Pong!"
+  - network:
+      about: "Print some information about your current network."
