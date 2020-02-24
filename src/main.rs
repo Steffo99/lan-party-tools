@@ -87,7 +87,8 @@ fn fetch_public_ipv6() -> String {
 
 fn main() {
     let yaml = clap::load_yaml!("cli.yml");
-    let matches = clap::App::from_yaml(yaml).get_matches();
+    let app = clap::App::from_yaml(yaml).setting(clap::AppSettings::ArgRequiredElseHelp);
+    let matches = app.get_matches();
 
     if matches.subcommand_matches("ping").is_some() {
         println!("Pong!")
@@ -119,9 +120,4 @@ fn main() {
             println!("{}/32", &public_ipv6);
         }
     }
-
-    else {
-        panic!("Unknown subcommand");
-    }
-
 }
