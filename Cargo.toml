@@ -1,6 +1,6 @@
 [package]
 name = "lan-party-tools"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Stefano Pigozzi <ste.pigozzi@gmail.com>"]
 edition = "2018"
 
@@ -10,3 +10,4 @@ edition = "2018"
 clap = { version="2.33.0", features=["yaml"] }
 systemstat = "0.1.5"
 reqwest = { version="0.10.2", features=["blocking"] }
+fs_extra = "1.1.0"

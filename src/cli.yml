@@ -1,5 +1,5 @@
 name: "lan-party-tools"
-version: "1.0"
+version: "0.2"
 author: "Stefano Pigozzi <me@steffo.eu>"
 about: "A command line utility to make organizing LAN parties simpler."
 subcommands:
@@ -7,3 +7,23 @@ subcommands:
       about: "Answers with Pong!"
   - network:
       about: "Print some information about your current network."
+  - steamcp:
+      about: "Copy a game folder into steamapps, and force Steam to recognize the game as downloaded."
+      args:
+        - steamapps:
+            short: "s"
+            long: "steamapps"
+            help: "The steamapps folder the game should be copied to."
+            takes_value: true
+            value_name: "FOLDER"
+        - source:
+            help: "The folder to be copied into steamapps."
+            takes_value: true
+            value_name: "FOLDER"
+            required: true
+        - appid:
+            short: "i"
+            long: "appid"
+            help: "The steamid of the game that should be copied."
+            takes_value: true
+            value_name: "APP_ID"
