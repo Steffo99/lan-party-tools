@@ -9,7 +9,7 @@ use std::fs;
 use std::io;
 use regex;
 use lazy_static::lazy_static;
-use std::fs::DirEntry;
+use fs_extra::dir::CopyOptions;
 
 
 fn count_octets(octets: &[u8]) -> u8 {
@@ -105,8 +105,8 @@ fn get_default_steamapps() -> &'static Path {
     }
 }
 
-fn find_manifests_in_folder(folder: &Path) -> Vec<DirEntry> {
-    let mut manifests: Vec<DirEntry> = vec![];
+fn find_manifests_in_folder(folder: &Path) -> Vec<fs::DirEntry> {
+    let mut manifests: Vec<fs::DirEntry> = vec![];
     for object in fs::read_dir(folder).expect("Could not open manifests folder") {
         let object = object.expect("Could not get DirEntry for object");
 
@@ -123,18 +123,37 @@ fn find_manifests_in_folder(folder: &Path) -> Vec<DirEntry> {
     return manifests;
 }
 
-fn extract_appid_from_manifest_contents(string: &str) -> &str {
-    lazy_static! {
-        static ref NAME_REGEX: regex::Regex = regex::Regex::new("(?m)^\\s*\"appid\"\\s+\"(.+)\"\\s*$").unwrap();
-    }
-    NAME_REGEX.captures(&string).expect("Could not find appid").get(1).expect("Could not find appid").as_str()
+struct AppManifest {
+    contents: String
 }
 
-fn extract_game_name_from_manifest_contents(string: &str) -> &str {
-    lazy_static! {
-        static ref NAME_REGEX: regex::Regex = regex::Regex::new("(?m)^\\s*\"name\"\\s+\"(.+)\"\\s*$").unwrap();
+impl AppManifest {
+    fn new(path: &Path) -> io::Result<Self> {
+        Ok(Self {
+            contents: fs::read_to_string(&path)?
+        })
     }
-    NAME_REGEX.captures(&string).expect("Could not find game name").get(1).expect("Could not find game name").as_str()
+
+    fn appid(&self) -> Option<&str> {
+        lazy_static! {
+            static ref REGEX: regex::Regex = regex::Regex::new("(?m)^\\s*\"appid\"\\s+\"(.+)\"\\s*$").unwrap();
+        }
+        Some(REGEX.captures(&self.contents)?.get(1)?.as_str())
+    }
+
+    fn game_name(&self) -> Option<&str> {
+        lazy_static! {
+            static ref REGEX: regex::Regex = regex::Regex::new("(?m)^\\s*\"name\"\\s+\"(.+)\"\\s*$").unwrap();
+        }
+        Some(REGEX.captures(&self.contents)?.get(1)?.as_str())
+    }
+
+    fn installdir(&self) -> Option<&str> {
+        lazy_static! {
+            static ref REGEX: regex::Regex = regex::Regex::new("(?m)^\\s*\"installdir\"\\s+\"(.+)\"\\s*$").unwrap();
+        }
+        Some(REGEX.captures(&self.contents)?.get(1)?.as_str())
+    }
 }
 
 fn main() {
@@ -176,6 +195,7 @@ fn main() {
     else if let Some(cmd_steam) = cmd_main.subcommand_matches("steam") {
 
         if let Some(cmd_list) = cmd_steam.subcommand_matches("list") {
+            // Find steamapps and ensure it is a directory
             let steamapps_path = match cmd_list.value_of("steamapps") {
                 None => {
                     get_default_steamapps()
@@ -184,28 +204,267 @@ fn main() {
                     Path::new(string)
                 },
             };
-
             if !steamapps_path.is_dir() {
-                panic!("The steamapps path is not a directory.")
+                clap::Error {
+                    message: "steamapps path is not a directory".to_string(),
+                    kind: clap::ErrorKind::InvalidValue,
+                    info: Some(vec!["steamapps".to_string()]),
+                }.exit();
             }
-
-            for manifest in find_manifests_in_folder(steamapps_path) {
+            // Find all appmanifests in steamapps
+            for manifest in find_manifests_in_folder(&steamapps_path) {
                 let path = &manifest.path();
-                let manifest_contents = fs::read_to_string(&path).expect("Could not read manifest");
-
-                let appid = extract_appid_from_manifest_contents(&manifest_contents);
-                let game_name = extract_game_name_from_manifest_contents(&manifest_contents);
-
-                println!("{} - {}", &appid, &game_name);
+                let manifest = match AppManifest::new(&path) {
+                    Ok(m) => m,
+                    Err(_) => {
+                        eprintln!("{}\t! Could not read appmanifest", &path.file_name().unwrap().to_str().unwrap());
+                        return;
+                    },
+                };
+                let appid = match manifest.appid() {
+                    Some(m) => m,
+                    None => {
+                        eprintln!("{}\t! Could not find appid", &path.file_name().unwrap().to_str().unwrap());
+                        return;
+                    },
+                };
+                let game_name = match manifest.game_name() {
+                    Some(m) => m,
+                    None => {
+                        eprintln!("{}\t! Could not find game name", &appid);
+                        return;
+                    },
+                };
+                println!("{}\t- {}", &appid, &game_name);
             };
         }
 
         else if let Some(cmd_backup) = cmd_steam.subcommand_matches("backup") {
-            println!("backup");
+            // Find steamapps and ensure it is a directory
+            let steamapps_path = match cmd_backup.value_of("steamapps") {
+                None => {
+                    get_default_steamapps()
+                },
+                Some(string) => {
+                    Path::new(string)
+                },
+            };
+            if !steamapps_path.is_dir() {
+                clap::Error {
+                    message: "steamapps path is not a directory".to_string(),
+                    kind: clap::ErrorKind::InvalidValue,
+                    info: Some(vec!["steamapps".to_string()]),
+                }.exit();
+            }
+
+            // Find steamapps/common and ensure it is a directory
+            let steamapps_common_path = &steamapps_path.join(Path::new("common"));
+            if !steamapps_common_path.is_dir() {
+                eprintln!("Error: No common folder in steamapps");
+                return;
+            }
+
+            // Find the appids to parse
+            let appids = cmd_backup.values_of("appids").unwrap();
+
+            // Find the backup destination
+            let destination_path = match cmd_backup.value_of("destination") {
+                None => {
+                    Path::new(".")
+                },
+                Some(destination) => {
+                    Path::new(destination)
+                },
+            };
+
+            // Find (or create) the destination/common directory
+            let destination_common_path = &destination_path.join(Path::new("common"));
+            if ! &destination_common_path.is_dir() {
+                match fs::create_dir(&destination_common_path) {
+                    Err(_) => {
+                        eprintln!("Warning: Could not create directory at {}", &destination_common_path.to_str().unwrap());
+                    },
+                    _ => {}
+                };
+            }
+
+            // Backup games
+            for appid in appids {
+                // Find the game manifest
+                let manifest_path = &steamapps_path.join(Path::new(&format!("appmanifest_{}.acf", &appid)));
+                let manifest = match AppManifest::new(&manifest_path) {
+                    Ok(am,) => am,
+                    Err(error) => {
+                        eprintln!("{}\t! Could not read {} ({})", &appid, &manifest_path.to_str().unwrap(), &error.to_string());
+                        continue;
+                    },
+                };
+
+                // Find manifest elements
+                let installdir = match manifest.installdir() {
+                    Some(m) => m,
+                    None => {
+                        eprintln!("{}\t! Could not find installdir", &appid);
+                        return;
+                    },
+                };
+
+                // Find the installdir folder
+                let installdir_path = &steamapps_common_path.join(Path::new(installdir));
+                if !installdir_path.is_dir() {
+                    eprintln!("{}\t! installdir is not a folder", &appid);
+                    return;
+                }
+
+                // Copy the manifest
+                match fs_extra::copy_items(&vec![manifest_path], &destination_path, &CopyOptions {
+                    overwrite: true,
+                    skip_exist: false,
+                    buffer_size: 0,
+                    copy_inside: true,
+                    depth: 0
+                }) {
+                    Err(_) => {
+                        eprintln!("{}\t! Error copying manifest", &appid);
+                        continue;
+                    },
+                    _ => {},
+                };
+
+                // Copy the game files
+                match fs_extra::copy_items(&vec![installdir_path], &destination_common_path, &CopyOptions {
+                    overwrite: true,
+                    skip_exist: false,
+                    buffer_size: 0,
+                    copy_inside: true,
+                    depth: 0
+                }) {
+                    Err(_) => {
+                        eprintln!("{}\t! Error copying game files", &appid);
+                        continue;
+                    },
+                    _ => {},
+                };
+
+                println!("{}\t- Successfully backed up", &appid);
+            }
         }
 
         else if let Some(cmd_restore) = cmd_steam.subcommand_matches("restore") {
-            println!("restore");
+            // Find steamapps and ensure it is a directory
+            let steamapps_path = match cmd_restore.value_of("steamapps") {
+                None => {
+                    get_default_steamapps()
+                },
+                Some(string) => {
+                    Path::new(string)
+                },
+            };
+            if !steamapps_path.is_dir() {
+                clap::Error {
+                    message: "steamapps path is not a directory".to_string(),
+                    kind: clap::ErrorKind::InvalidValue,
+                    info: Some(vec!["steamapps".to_string()]),
+                }.exit();
+            }
+
+            // Find steamapps/common and ensure it is a directory
+            let steamapps_common_path = &steamapps_path.join(Path::new("common"));
+            if !steamapps_common_path.is_dir() {
+                eprintln!("Error: No common folder in steamapps");
+                return;
+            }
+
+            // Find the appids to parse
+            let appids = cmd_restore.values_of("appids").unwrap();
+
+            // Find the backup source and ensure it is a directory
+            let source_path = match cmd_restore.value_of("source") {
+                None => {
+                    Path::new(".")
+                },
+                Some(destination) => {
+                    Path::new(destination)
+                },
+            };
+            if !source_path.is_dir() {
+                clap::Error {
+                    message: "source path is not a directory".to_string(),
+                    kind: clap::ErrorKind::InvalidValue,
+                    info: Some(vec!["source".to_string()]),
+                }.exit();
+            }
+
+            // Find the destination/common directory
+            let source_common_path = &source_path.join(Path::new("common"));
+            if ! &source_common_path.is_dir() {
+                clap::Error {
+                    message: "no common directory in source path".to_string(),
+                    kind: clap::ErrorKind::InvalidValue,
+                    info: Some(vec!["source".to_string()]),
+                }.exit();
+            }
+
+            // Restore backups
+            for appid in appids {// Find the game manifest
+                let manifest_path = &source_path.join(Path::new(&format!("appmanifest_{}.acf", &appid)));
+                let manifest = match AppManifest::new(&manifest_path) {
+                    Ok(am,) => am,
+                    Err(error) => {
+                        eprintln!("{}\t! Could not read {} ({})", &appid, &manifest_path.to_str().unwrap(), &error.to_string());
+                        continue;
+                    },
+                };
+
+                // Find manifest elements
+                let installdir = match manifest.installdir() {
+                    Some(m) => m,
+                    None => {
+                        eprintln!("{}\t! Could not find installdir", &appid);
+                        return;
+                    },
+                };
+
+                // Find the installdir folder
+                let installdir_path = &source_common_path.join(Path::new(installdir));
+                if !installdir_path.is_dir() {
+                    eprintln!("{}\t! installdir is not a folder", &appid);
+                    return;
+                }
+
+                // Copy the manifest
+                match fs_extra::copy_items(&vec![manifest_path], &steamapps_path, &CopyOptions {
+                    overwrite: true,
+                    skip_exist: false,
+                    buffer_size: 0,
+                    copy_inside: true,
+                    depth: 0
+                }) {
+                    Err(_) => {
+                        eprintln!("{}\t! Error copying manifest", &appid);
+                        continue;
+                    },
+                    _ => {},
+                };
+
+                // Copy the game files
+                match fs_extra::copy_items(&vec![installdir_path], &steamapps_common_path, &CopyOptions {
+                    overwrite: true,
+                    skip_exist: false,
+                    buffer_size: 0,
+                    copy_inside: true,
+                    depth: 0
+                }) {
+                    Err(_) => {
+                        eprintln!("{}\t! Error copying game files", &appid);
+                        continue;
+                    },
+                    _ => {},
+                };
+
+                println!("{}\t- Successfully restored", &appid);
+
+            }
         }
     }
 }

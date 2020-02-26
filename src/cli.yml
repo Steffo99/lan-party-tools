@@ -12,6 +12,12 @@ subcommands:
       subcommands:
         - list:
             about: "List installed games"
+            args:
+              - steamapps:
+                  long: "steamapps"
+                  help: "Your steamapps folder"
+                  takes_value: true
+                  value_name: "FOLDER"
         - backup:
             about: "Prepare a game backup"
             args:
@@ -20,7 +26,13 @@ subcommands:
                   help: "Your steamapps folder"
                   takes_value: true
                   value_name: "FOLDER"
+              - destination:
+                  short: "d"
+                  long: "destination"
+                  takes_value: true
+                  value_name: "FOLDER"
               - appids:
+                  index: 1
                   help: "The app id(s) of the game(s) that should be backed up"
                   multiple: true
                   required: true
@@ -32,7 +44,13 @@ subcommands:
                   help: "Your steamapps folder"
                   takes_value: true
                   value_name: "FOLDER"
+              - source:
+                  short: "s"
+                  long: "source"
+                  takes_value: true
+                  value_name: "FOLDER"
               - appids:
+                  index: 1
                   help: "The app id(s) of the game(s) that should be backed up."
                   multiple: true
                   required: true
