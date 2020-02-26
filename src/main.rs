@@ -317,12 +317,15 @@ fn main() {
                 }
 
                 // Copy the manifest
-                match fs_extra::copy_items(&vec![manifest_path], &destination_path, &CopyOptions {
+                match fs_extra::copy_items_with_progress(&vec![manifest_path], &destination_path, &CopyOptions {
                     overwrite: true,
                     skip_exist: false,
-                    buffer_size: 0,
+                    buffer_size: 1_048_576,
                     copy_inside: true,
                     depth: 0
+                }, |process_info: fs_extra::TransitProcess| {
+                    println!("{}\t . Manifest: {} / {}", &appid, &process_info.copied_bytes, &process_info.total_bytes);
+                    fs_extra::dir::TransitProcessResult::ContinueOrAbort
                 }) {
                     Err(_) => {
                         eprintln!("{}\t! Error copying manifest", &appid);
@@ -332,12 +335,15 @@ fn main() {
                 };
 
                 // Copy the game files
-                match fs_extra::copy_items(&vec![installdir_path], &destination_common_path, &CopyOptions {
+                match fs_extra::copy_items_with_progress(&vec![installdir_path], &destination_common_path, &CopyOptions {
                     overwrite: true,
                     skip_exist: false,
-                    buffer_size: 0,
+                    buffer_size: 1_048_576,
                     copy_inside: true,
                     depth: 0
+                }, |process_info: fs_extra::TransitProcess| {
+                    println!("{}\t . Game files: {} / {}", &appid, &process_info.copied_bytes, &process_info.total_bytes);
+                    fs_extra::dir::TransitProcessResult::ContinueOrAbort
                 }) {
                     Err(_) => {
                         eprintln!("{}\t! Error copying game files", &appid);
@@ -433,12 +439,15 @@ fn main() {
                 }
 
                 // Copy the manifest
-                match fs_extra::copy_items(&vec![manifest_path], &steamapps_path, &CopyOptions {
+                match fs_extra::copy_items_with_progress(&vec![manifest_path], &steamapps_path, &CopyOptions {
                     overwrite: true,
                     skip_exist: false,
-                    buffer_size: 0,
+                    buffer_size: 1_048_576,
                     copy_inside: true,
                     depth: 0
+                }, |process_info: fs_extra::TransitProcess| {
+                    println!("{}\t . Manifest: {} / {}", &appid, &process_info.copied_bytes, &process_info.total_bytes);
+                    fs_extra::dir::TransitProcessResult::ContinueOrAbort
                 }) {
                     Err(_) => {
                         eprintln!("{}\t! Error copying manifest", &appid);
@@ -448,12 +457,15 @@ fn main() {
                 };
 
                 // Copy the game files
-                match fs_extra::copy_items(&vec![installdir_path], &steamapps_common_path, &CopyOptions {
+                match fs_extra::copy_items_with_progress(&vec![installdir_path], &steamapps_common_path, &CopyOptions {
                     overwrite: true,
                     skip_exist: false,
-                    buffer_size: 0,
+                    buffer_size: 1_048_576,
                     copy_inside: true,
                     depth: 0
+                }, |process_info: fs_extra::TransitProcess| {
+                    println!("{}\t . Game files: {} / {}", &appid, &process_info.copied_bytes, &process_info.total_bytes);
+                    fs_extra::dir::TransitProcessResult::ContinueOrAbort
                 }) {
                     Err(_) => {
                         eprintln!("{}\t! Error copying game files", &appid);
