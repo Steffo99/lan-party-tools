@@ -1,29 +1,38 @@
 name: "lan-party-tools"
 version: "0.2"
 author: "Stefano Pigozzi <me@steffo.eu>"
-about: "A command line utility to make organizing LAN parties simpler."
+about: "A command line utility to make organizing LAN parties simpler"
 subcommands:
   - ping:
-      about: "Answers with Pong!"
+      about: "Answer with Pong"
   - network:
-      about: "Print some information about your current network."
-  - steamcp:
-      about: "Copy a game folder into steamapps, and force Steam to recognize the game as downloaded."
-      args:
-        - steamapps:
-            short: "s"
-            long: "steamapps"
-            help: "The steamapps folder the game should be copied to."
-            takes_value: true
-            value_name: "FOLDER"
-        - source:
-            help: "The folder to be copied into steamapps."
-            takes_value: true
-            value_name: "FOLDER"
-            required: true
-        - appid:
-            short: "i"
-            long: "appid"
-            help: "The steamid of the game that should be copied."
-            takes_value: true
-            value_name: "APP_ID"
+      about: "Print some information about your current network"
+  - steam:
+      about: "Steam-related commands"
+      subcommands:
+        - list:
+            about: "List installed games"
+        - backup:
+            about: "Prepare a game backup"
+            args:
+              - steamapps:
+                  long: "steamapps"
+                  help: "Your steamapps folder"
+                  takes_value: true
+                  value_name: "FOLDER"
+              - appids:
+                  help: "The app id(s) of the game(s) that should be backed up"
+                  multiple: true
+                  required: true
+        - restore:
+            about: "Restore a game backup"
+            args:
+              - steamapps:
+                  long: "steamapps"
+                  help: "Your steamapps folder"
+                  takes_value: true
+                  value_name: "FOLDER"
+              - appids:
+                  help: "The app id(s) of the game(s) that should be backed up."
+                  multiple: true
+                  required: true

@@ -7,8 +7,10 @@ use reqwest;
 use std::path::Path;
 use std::fs;
 use std::io;
-use fs_extra;
-use std::io::Write;
+use regex;
+use lazy_static::lazy_static;
+use std::fs::DirEntry;
+
 
 fn count_octets(octets: &[u8]) -> u8 {
     let mut count: u8 = 0;
@@ -91,38 +93,60 @@ fn fetch_public_ipv6() -> String {
     reqwest::blocking::get("https://api6.ipify.org/").expect("Public IP request failed").text().expect("Could not parse Public IP response")
 }
 
-fn create_manifest(directory: &Path, appid: &str, installdir: &Path) -> io::Result<()> {
-    let path = directory.join(Path::new(&format!("appmanifest_{}.acf", appid)));
-    println!("{:?}", path);
+fn get_default_steamapps() -> &'static Path {
+    if cfg!(windows) {
+        Path::new(r"C:\Program Files (x86)\Steam\steamapps")
+    } else if cfg!(macos) {
+        Path::new(r"~/Library/Application Support/Steam")
+    } else if cfg!(linux) {
+        Path::new(r"~/.steam/steam/steamapps")
+    } else {
+        unimplemented!("Unsupported platform!");
+    }
+}
 
-    let mut file = fs::File::create(path)?;
-    file.write(b"\"AppState\"\n")?;
-    file.write(b"{\n")?;
-    file.write(format!("\t\"appid\"\t\t\"{}\"\n", appid).as_bytes())?;
-    file.write(b"\t\"Universe\"\t\t\"1\"\n")?;
-    file.write(b"\t\"StateFlags\"\t\t\"1026\"\n")?;
-    file.write(b"\t\"LastUpdated\"\t\t\"0\"\n")?;
-    file.write(b"\t\"UpdateResult\"\t\t\"4\"\n")?;
-    file.write(b"\t\"SizeOnDisk\"\t\t\"0\"\n")?;
-    file.write(b"\t\"buildid\"\t\t\"0\"\n")?;
-    file.write(b"\t\"BytesToDownload\"\t\t\"0\"\n")?;
-    file.write(b"\t\"BytesDownloaded\"\t\t\"0\"\n")?;
-    file.write(format!("\t\"installdir\"\t\t\"{}\"\n", installdir.file_name().unwrap().to_str().unwrap()).as_bytes())?;
-    file.write(b"}")?;
+fn find_manifests_in_folder(folder: &Path) -> Vec<DirEntry> {
+    let mut manifests: Vec<DirEntry> = vec![];
+    for object in fs::read_dir(folder).expect("Could not open manifests folder") {
+        let object = object.expect("Could not get DirEntry for object");
 
-    return Ok(());
+        if !object.path().is_file() {
+            continue;
+        }
+
+        if !object.file_name().to_str().unwrap().starts_with("appmanifest_") {
+            continue;
+        }
+
+        manifests.push(object);
+    };
+    return manifests;
+}
+
+fn extract_appid_from_manifest_contents(string: &str) -> &str {
+    lazy_static! {
+        static ref NAME_REGEX: regex::Regex = regex::Regex::new("(?m)^\\s*\"appid\"\\s+\"(.+)\"\\s*$").unwrap();
+    }
+    NAME_REGEX.captures(&string).expect("Could not find appid").get(1).expect("Could not find appid").as_str()
+}
+
+fn extract_game_name_from_manifest_contents(string: &str) -> &str {
+    lazy_static! {
+        static ref NAME_REGEX: regex::Regex = regex::Regex::new("(?m)^\\s*\"name\"\\s+\"(.+)\"\\s*$").unwrap();
+    }
+    NAME_REGEX.captures(&string).expect("Could not find game name").get(1).expect("Could not find game name").as_str()
 }
 
 fn main() {
     let yaml = clap::load_yaml!("cli.yml");
     let app = clap::App::from_yaml(yaml).setting(clap::AppSettings::ArgRequiredElseHelp);
-    let matches = app.get_matches();
+    let cmd_main = &app.get_matches();
 
-    if matches.subcommand_matches("ping").is_some() {
+    if cmd_main.subcommand_matches("ping").is_some() {
         println!("Pong!")
     }
 
-    else if matches.subcommand_matches("network").is_some() {
+    else if cmd_main.subcommand_matches("network").is_some() {
         let sys = systemstat::System::new();
         let networks = sys.networks().expect("Could not get networks.");
 
@@ -149,49 +173,39 @@ fn main() {
         }
     }
 
-    else if let Some(steammv) = matches.subcommand_matches("steamcp") {
-        let source_arg = steammv.value_of("source").expect("Expected a source path.");
-        let destination_arg = steammv.value_of("steamapps");
-        let steamapps = match destination_arg {
-            None => {
-                if cfg!(windows) {
-                    Path::new(r"C:\Program Files (x86)\Steam\steamapps")
-                } else {
-                    unimplemented!("Non-Windows OSes are not supported yet");
-                }
-            },
-            Some(arg) => {
-                Path::new(arg)
-            },
-        };
-        let steamapps_common = steamapps.join(Path::new("common"));
-        let source = Path::new(source_arg);
+    else if let Some(cmd_steam) = cmd_main.subcommand_matches("steam") {
 
-        let appid_arg = steammv.value_of("appid");
-        let raw_appid = match appid_arg {
-            None => {
-                println!("Trying to find the steamid of the game...");
-                let steam_appid_path = &source.join(Path::new("steam_appid.txt"));
-                fs::metadata(&steam_appid_path).expect("No steam_appid.txt file found.");
-                String::from_utf8(fs::read(&steam_appid_path).expect("Couldn't read steam_appid.txt file.")).expect("Failed to parse steam_appid.txt file.")
-            },
-            Some(id) => {id.to_string()},
-        };
-        let appid = raw_appid.strip_suffix("\n").unwrap_or(raw_appid.as_str());
-        println!("Detected appid: {}", &appid);
+        if let Some(cmd_list) = cmd_steam.subcommand_matches("list") {
+            let steamapps_path = match cmd_list.value_of("steamapps") {
+                None => {
+                    get_default_steamapps()
+                },
+                Some(string) => {
+                    Path::new(string)
+                },
+            };
 
-        println!("Copying...");
-        fs_extra::copy_items(&vec![&source], &steamapps_common, &fs_extra::dir::CopyOptions {
-            overwrite: false,
-            skip_exist: true,
-            buffer_size: 0,
-            copy_inside: false,
-            depth: 0
-        }).unwrap();
-        println!("Copy successful!");
+            if !steamapps_path.is_dir() {
+                panic!("The steamapps path is not a directory.")
+            }
 
-        println!("Generating manifest...");
-        create_manifest(&steamapps, &appid, &source).expect("Could not create manifest file.");
-        println!("Manifest created!");
+            for manifest in find_manifests_in_folder(steamapps_path) {
+                let path = &manifest.path();
+                let manifest_contents = fs::read_to_string(&path).expect("Could not read manifest");
+
+                let appid = extract_appid_from_manifest_contents(&manifest_contents);
+                let game_name = extract_game_name_from_manifest_contents(&manifest_contents);
+
+                println!("{} - {}", &appid, &game_name);
+            };
+        }
+
+        else if let Some(cmd_backup) = cmd_steam.subcommand_matches("backup") {
+            println!("backup");
+        }
+
+        else if let Some(cmd_restore) = cmd_steam.subcommand_matches("restore") {
+            println!("restore");
+        }
     }
 }
