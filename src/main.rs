@@ -10,6 +10,7 @@ use std::io;
 use regex;
 use lazy_static::lazy_static;
 use fs_extra::dir::CopyOptions;
+use pbr;
 
 
 fn count_octets(octets: &[u8]) -> u8 {
@@ -154,6 +155,10 @@ impl AppManifest {
         }
         Some(REGEX.captures(&self.contents)?.get(1)?.as_str())
     }
+}
+
+fn percentage(num: u64, den: u64) -> u64 {
+    return (((num as f64) / (den as f64)) * 10000f64) as u64;
 }
 
 fn main() {
@@ -317,15 +322,12 @@ fn main() {
                 }
 
                 // Copy the manifest
-                match fs_extra::copy_items_with_progress(&vec![manifest_path], &destination_path, &CopyOptions {
+                match fs_extra::copy_items(&vec![manifest_path], &destination_path, &CopyOptions {
                     overwrite: true,
                     skip_exist: false,
                     buffer_size: 1_048_576,
                     copy_inside: true,
                     depth: 0
-                }, |process_info: fs_extra::TransitProcess| {
-                    println!("{}\t . Manifest: {} / {}", &appid, &process_info.copied_bytes, &process_info.total_bytes);
-                    fs_extra::dir::TransitProcessResult::ContinueOrAbort
                 }) {
                     Err(_) => {
                         eprintln!("{}\t! Error copying manifest", &appid);
@@ -335,6 +337,11 @@ fn main() {
                 };
 
                 // Copy the game files
+                let mut game_files_pb = pbr::ProgressBar::new(10000);
+                game_files_pb.format("|█▓░|");
+                game_files_pb.show_counter = false;
+                game_files_pb.show_speed = false;
+                game_files_pb.message(&appid);
                 match fs_extra::copy_items_with_progress(&vec![installdir_path], &destination_common_path, &CopyOptions {
                     overwrite: true,
                     skip_exist: false,
@@ -342,7 +349,7 @@ fn main() {
                     copy_inside: true,
                     depth: 0
                 }, |process_info: fs_extra::TransitProcess| {
-                    println!("{}\t . Game files: {} / {}", &appid, &process_info.copied_bytes, &process_info.total_bytes);
+                    game_files_pb.set(percentage(process_info.copied_bytes, process_info.total_bytes));
                     fs_extra::dir::TransitProcessResult::ContinueOrAbort
                 }) {
                     Err(_) => {
@@ -351,8 +358,7 @@ fn main() {
                     },
                     _ => {},
                 };
-
-                println!("{}\t- Successfully backed up", &appid);
+                game_files_pb.finish_print("\n");
             }
         }
 
@@ -412,7 +418,8 @@ fn main() {
             }
 
             // Restore backups
-            for appid in appids {// Find the game manifest
+            for appid in appids {
+                // Find the game manifest
                 let manifest_path = &source_path.join(Path::new(&format!("appmanifest_{}.acf", &appid)));
                 let manifest = match AppManifest::new(&manifest_path) {
                     Ok(am,) => am,
@@ -439,15 +446,12 @@ fn main() {
                 }
 
                 // Copy the manifest
-                match fs_extra::copy_items_with_progress(&vec![manifest_path], &steamapps_path, &CopyOptions {
+                match fs_extra::copy_items(&vec![manifest_path], &steamapps_path, &CopyOptions {
                     overwrite: true,
                     skip_exist: false,
                     buffer_size: 1_048_576,
                     copy_inside: true,
                     depth: 0
-                }, |process_info: fs_extra::TransitProcess| {
-                    println!("{}\t . Manifest: {} / {}", &appid, &process_info.copied_bytes, &process_info.total_bytes);
-                    fs_extra::dir::TransitProcessResult::ContinueOrAbort
                 }) {
                     Err(_) => {
                         eprintln!("{}\t! Error copying manifest", &appid);
@@ -457,6 +461,11 @@ fn main() {
                 };
 
                 // Copy the game files
+                let mut game_files_pb = pbr::ProgressBar::new(10000);
+                game_files_pb.format("|█▓░|");
+                game_files_pb.show_counter = false;
+                game_files_pb.show_speed = false;
+                game_files_pb.message(&appid);
                 match fs_extra::copy_items_with_progress(&vec![installdir_path], &steamapps_common_path, &CopyOptions {
                     overwrite: true,
                     skip_exist: false,
@@ -464,7 +473,7 @@ fn main() {
                     copy_inside: true,
                     depth: 0
                 }, |process_info: fs_extra::TransitProcess| {
-                    println!("{}\t . Game files: {} / {}", &appid, &process_info.copied_bytes, &process_info.total_bytes);
+                    game_files_pb.set(percentage(process_info.copied_bytes, process_info.total_bytes));
                     fs_extra::dir::TransitProcessResult::ContinueOrAbort
                 }) {
                     Err(_) => {
@@ -473,8 +482,7 @@ fn main() {
                     },
                     _ => {},
                 };
-
-                println!("{}\t- Successfully restored", &appid);
+                game_files_pb.finish_print("\n");
 
             }
         }
