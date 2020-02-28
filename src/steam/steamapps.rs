@@ -2,14 +2,13 @@ use std::path::Path;
 use std::fs;
 use std::io;
 use super::appmanifest::AppManifest;
-use clap::App;
 
 pub struct SteamApps<'a> {
     pub location: &'a Path
 }
 
-impl SteamApps {
-    pub fn default() -> Self<'static> {
+impl<'a> SteamApps<'a> {
+    pub fn default() -> Self {
         Self {
             location: {
                 if cfg!(windows) {
@@ -25,13 +24,13 @@ impl SteamApps {
         }
     }
 
-    pub fn path(location: &Path) -> Self {
+    pub fn path(location: &'a Path) -> Self {
         Self {
             location
         }
     }
 
-    pub fn from_console_input(input: &Option<&str>) -> Self {
+    pub fn from_console_input(input: &'a Option<&str>) -> Self {
         match input {
             None => {
                 Self::default()
@@ -49,22 +48,25 @@ impl SteamApps {
             return None
         };
 
-        Some(Path)
+        Some(path)
     }
 
     pub fn get_or_create_common(&self) -> io::Result<&Path> {
         let path = &self.location.join(Path::new("common"));
 
         if ! &path.is_dir() {
-            fs::create_dir(&destination_common_path)?;
+            fs::create_dir(&path)?;
         }
 
         Ok(path)
     }
 
+    pub fn get_manifest_path(&self, appid: &str) -> &Path {
+        &self.location.join(Path::new(&format!("appmanifest_{}.acf", &appid)))
+    }
+
     pub fn get_manifest(&self, appid: &str) -> io::Result<AppManifest> {
-        let path = &self.location.join(Path::new(&format!("appmanifest_{}.acf", &appid)));
-        AppManifest::new(path)
+        AppManifest::new(&self.get_manifest_path(&appid))
     }
 }
 

@@ -1,5 +1,3 @@
-#![feature(ip)]
-
 use reqwest;
 use systemstat;
 use systemstat::{IpAddr, Platform};
@@ -86,7 +84,7 @@ fn fetch_public_ipv6() -> String {
     reqwest::blocking::get("https://api6.ipify.org/").expect("Public IP request failed").text().expect("Could not parse Public IP response")
 }
 
-pub fn network_command() {
+pub fn network_command() -> Result<(), &'static str> {
     let sys = systemstat::System::new();
     let networks = sys.networks().expect("Could not get networks.");
 
@@ -111,4 +109,6 @@ pub fn network_command() {
     if public_ipv6 != public_ipv4 {
         println!("{}/32", &public_ipv6);
     }
+
+    Ok(())
 }

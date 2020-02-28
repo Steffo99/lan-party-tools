@@ -2,6 +2,7 @@ use regex;
 use std::path::Path;
 use std::io;
 use std::fs;
+use lazy_static::lazy_static;
 
 pub struct AppManifest {
     contents: String
@@ -38,7 +39,7 @@ impl AppManifest {
     pub fn get_installdir(&self, base_dir: &Path) -> Option<&Path> {
         let installdir = &self.installdir()?;
 
-        if ! &path.is_dir() {
+        if ! &installdir.is_dir() {
             return None
         };
 

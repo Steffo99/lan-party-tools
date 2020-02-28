@@ -1,12 +1,12 @@
 pub mod appmanifest;
 pub mod steamapps;
 
-use std::io;
 use std::fs;
 use std::path::Path;
 use steamapps::SteamApps;
 use clap;
 use fs_extra;
+use crate::steam::appmanifest::AppManifest;
 
 
 fn find_manifests_in_folder(folder: &Path) -> Vec<fs::DirEntry> {
@@ -27,34 +27,18 @@ fn find_manifests_in_folder(folder: &Path) -> Vec<fs::DirEntry> {
     return manifests;
 }
 
-pub fn steam_list_command(steamapps: &Option<&str>) {
+pub fn steam_list_command(steamapps: &Option<&str>) -> Result<(), &'static str> {
     let steamapps = SteamApps::from_console_input(&steamapps);
 
     for manifest in find_manifests_in_folder(&steamapps.location) {
         let path = &manifest.path();
-        let manifest = match appmanifest::AppManifest::new(&path) {
-            Ok(m) => m,
-            Err(_) => {
-                eprintln!("{}\t! Could not read appmanifest", &path.file_name().unwrap().to_str().unwrap());
-                return;
-            },
-        };
-        let appid = match manifest.appid() {
-            Some(m) => m,
-            None => {
-                eprintln!("{}\t! Could not find appid", &path.file_name().unwrap().to_str().unwrap());
-                return;
-            },
-        };
-        let game_name = match manifest.game_name() {
-            Some(m) => m,
-            None => {
-                eprintln!("{}\t! Could not find game name", &appid);
-                return;
-            },
-        };
+        let manifest = appmanifest::AppManifest::new(&path).ok().ok_or(format!("Could not read appmanifest at {}", &path.to_str().unwrap()).as_str())?;
+        let appid = &manifest.appid().ok_or(format!("Could not find appid in manifest at {}", &path.to_str().unwrap()).as_str())?;
+        let game_name = &manifest.game_name().ok_or(format!("Could not find game name in manifest at {}", &path.to_str().unwrap()).as_str())?;
         println!("{}\t- {}", &appid, &game_name);
     };
+
+    Ok(())
 }
 
 fn copy_manifest(from: &Path, to: &Path) -> Result<u64, fs_extra::error::Error> {
@@ -72,12 +56,12 @@ fn progress_percentage(num: u64, den: u64) -> u64 {
 }
 
 
-fn copy_game_files(from: &Path, to: &Path) -> Result<u64, fs_extra::error::Error> {
+fn copy_game_files(from: &Path, to: &Path, message: &str) -> Result<u64, fs_extra::error::Error> {
     let mut game_files_pb = pbr::ProgressBar::new(10000);
     game_files_pb.format("|█▓░|");
     game_files_pb.show_counter = false;
     game_files_pb.show_speed = false;
-    game_files_pb.message(&appid);
+    game_files_pb.message(&message);
     let result = fs_extra::copy_items_with_progress(&vec![from], &to, &fs_extra::dir::CopyOptions {
         overwrite: true,
         skip_exist: false,
@@ -85,7 +69,7 @@ fn copy_game_files(from: &Path, to: &Path) -> Result<u64, fs_extra::error::Error
         copy_inside: true,
         depth: 0
     }, |process_info: fs_extra::TransitProcess| {
-        game_files_pb.set(percentage(process_info.copied_bytes, process_info.total_bytes));
+        game_files_pb.set(progress_percentage(process_info.copied_bytes, process_info.total_bytes));
         fs_extra::dir::TransitProcessResult::ContinueOrAbort
     });
     game_files_pb.finish_print("\n");
@@ -95,22 +79,51 @@ fn copy_game_files(from: &Path, to: &Path) -> Result<u64, fs_extra::error::Error
 pub fn steam_backup_command(
     steamapps: &Option<&str>,
     destination: &Option<&str>,
-    appids: clap::Values
+    appids: &Option<clap::Values>
 ) -> Result<(), &'static str> {
 
-    let steamapps = SteamApps::from_console_input(&steamapps);
-    let steam_common = &steamapps.get_common().ok_or(Err("No common folder found in steamapps"))?;
+    let steam = SteamApps::from_console_input(&steamapps);
+    let steam_common = &steam.get_common().ok_or("No common folder found in steamapps")?;
 
     let destination = SteamApps::from_console_input(&destination);
-    let destination_common = &destination.get_or_create_common().ok_or(Err("Could not create common folder in destination"))?;
+    let destination_common = &destination.get_or_create_common().ok().ok_or("Could not create common folder in destination")?;
 
-    for appid in appids {
-        let manifest = &steamapps.get_manifest(&appid);
-        let installdir = &manifest.get_installdir().ok_or(Err(format!("Could not find installdir for appid {}", &appid)))?;
+    if appids.is_none() {
+        return Err("Nothing to backup");
+    }
+    for appid in appids.unwrap() {
+        let manifest_path = &steam.get_manifest_path(&appid);
+        let manifest = AppManifest::new(&manifest_path).ok().ok_or(format!("Could not read appmanifest for appid {}", &appid).as_str())?;
+        let steam_installdir = &manifest.get_installdir(&steam.location).ok_or(format!("Could not find installdir for appid {}", &appid).as_str())?;
 
-        copy_manifest(&/*TODO*/, &destination.location);
+        copy_manifest(&manifest_path, &destination.location).ok().ok_or(format!("Couldn't copy manifest for appid {}", &appid).as_str())?;
+        copy_game_files(&steam_installdir, &destination_common, &appid).ok().ok_or(format!("Couldn't copy game files for appid {}", &appid).as_str())?;
+    };
+    Ok(())
+}
 
-        // Copy the game files
+pub fn steam_restore_command(
+    steamapps: &Option<&str>,
+    source: &Option<&str>,
+    appids: &Option<clap::Values>
+) -> Result<(), &'static str> {
+
+    let source = SteamApps::from_console_input(&source);
+    let source_common = &source.get_common().ok_or("No common folder found in destination")?;
+
+    let steam = SteamApps::from_console_input(&steamapps);
+    let steam_common = &steam.get_or_create_common().ok().ok_or("Could not create common folder in steamapps")?;
+
+    if appids.is_none() {
+        return Err("Nothing to restore");
+    }
+    for appid in appids.unwrap() {
+        let manifest_path = &source.get_manifest_path(&appid);
+        let manifest = AppManifest::new(&manifest_path).ok().ok_or(format!("Could not read appmanifest for appid {}", &appid).as_str())?;
+        let source_installdir = &manifest.get_installdir(&source.location).ok_or(format!("Could not find installdir for appid {}", &appid).as_str())?;
+
+        copy_manifest(&manifest_path, &steam.location).ok().ok_or(format!("Couldn't copy manifest for appid {}", &appid).as_str())?;
+        copy_game_files(&source_installdir, &steam_common, &appid).ok().ok_or(format!("Couldn't copy game files for appid {}", &appid).as_str())?;
     };
     Ok(())
 }
