@@ -24,15 +24,15 @@ fn main() -> Result<(), &'static str> {
     else if let Some(cmd_steam) = cmd_main.subcommand_matches("steam") {
 
         if let Some(cmd_list) = cmd_steam.subcommand_matches("list") {
-            steam::steam_list_command(&cmd_list.value_of("steamapps"))
+            steam::steam_list_command(cmd_list.value_of("steamapps"))
         }
 
         else if let Some(cmd_backup) = cmd_steam.subcommand_matches("backup") {
-            steam::steam_backup_command(&cmd_backup.value_of("steamapps"), &cmd_backup.value_of("destination"), &cmd_backup.values_of("appids"))
+            steam::steam_backup_command(cmd_backup.value_of("steamapps"), cmd_backup.value_of("destination"), cmd_backup.values_of("appids"))
         }
 
         else if let Some(cmd_restore) = cmd_steam.subcommand_matches("restore") {
-            steam::steam_restore_command(&cmd_restore.value_of("steamapps"), &cmd_restore.value_of("source"), &cmd_restore.values_of("appids"))
+            steam::steam_restore_command(cmd_restore.value_of("steamapps"), cmd_restore.value_of("source"), cmd_restore.values_of("appids"))
         }
 
         else {

@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::fs;
 use std::io;
 use super::appmanifest::AppManifest;
@@ -41,8 +41,8 @@ impl<'a> SteamApps<'a> {
         }
     }
 
-    pub fn get_common(&self) -> Option<&Path> {
-        let path = &self.location.join(Path::new("common"));
+    pub fn get_common(&self) -> Option<PathBuf> {
+        let path = self.location.join(Path::new("common"));
 
         if ! &path.is_dir() {
             return None
@@ -51,8 +51,8 @@ impl<'a> SteamApps<'a> {
         Some(path)
     }
 
-    pub fn get_or_create_common(&self) -> io::Result<&Path> {
-        let path = &self.location.join(Path::new("common"));
+    pub fn get_or_create_common(&self) -> io::Result<PathBuf> {
+        let path = self.location.join(Path::new("common"));
 
         if ! &path.is_dir() {
             fs::create_dir(&path)?;
@@ -61,8 +61,8 @@ impl<'a> SteamApps<'a> {
         Ok(path)
     }
 
-    pub fn get_manifest_path(&self, appid: &str) -> &Path {
-        &self.location.join(Path::new(&format!("appmanifest_{}.acf", &appid)))
+    pub fn get_manifest_path(&self, appid: &str) -> PathBuf {
+        self.location.join(Path::new(&format!("appmanifest_{}.acf", &appid)))
     }
 
     pub fn get_manifest(&self, appid: &str) -> io::Result<AppManifest> {

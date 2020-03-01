@@ -1,5 +1,5 @@
 use regex;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::io;
 use std::fs;
 use lazy_static::lazy_static;
@@ -36,8 +36,8 @@ impl AppManifest {
         Some(Path::new(REGEX.captures(&self.contents)?.get(1)?.as_str()))
     }
 
-    pub fn get_installdir(&self, base_dir: &Path) -> Option<&Path> {
-        let installdir = &base_dir.join(&self.installdir()?);
+    pub fn get_installdir(&self, base_dir: &Path) -> Option<PathBuf> {
+        let installdir = base_dir.join(&self.installdir()?);
 
         if ! &installdir.is_dir() {
             return None

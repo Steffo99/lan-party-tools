@@ -27,7 +27,7 @@ fn find_manifests_in_folder(folder: &Path) -> Vec<fs::DirEntry> {
     return manifests;
 }
 
-pub fn steam_list_command(steamapps: &Option<&str>) -> Result<(), &'static str> {
+pub fn steam_list_command(steamapps: Option<&str>) -> Result<(), &'static str> {
     let steamapps = SteamApps::from_console_input(&steamapps);
 
     for manifest in find_manifests_in_folder(&steamapps.location) {
@@ -77,9 +77,9 @@ fn copy_game_files(from: &Path, to: &Path, message: &str) -> Result<u64, fs_extr
 }
 
 pub fn steam_backup_command(
-    steamapps: &Option<&str>,
-    destination: &Option<&str>,
-    appids: &Option<clap::Values>
+    steamapps: Option<&str>,
+    destination: Option<&str>,
+    appids: Option<clap::Values>
 ) -> Result<(), &'static str> {
 
     let steam = SteamApps::from_console_input(&steamapps);
@@ -103,9 +103,9 @@ pub fn steam_backup_command(
 }
 
 pub fn steam_restore_command(
-    steamapps: &Option<&str>,
-    source: &Option<&str>,
-    appids: &Option<clap::Values>
+    steamapps: Option<&str>,
+    source: Option<&str>,
+    appids: Option<clap::Values>
 ) -> Result<(), &'static str> {
 
     let source = SteamApps::from_console_input(&source);
