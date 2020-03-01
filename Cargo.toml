@@ -1,8 +1,12 @@
 [package]
 name = "lan-party-tools"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Stefano Pigozzi <ste.pigozzi@gmail.com>"]
 edition = "2018"
+readme = "README.md"
+keywords = ["steam", "gaming", "network"]
+categories = ["command-line-utilities", "games"]
+license = "GPL-3.0-or-later"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
