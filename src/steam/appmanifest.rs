@@ -37,7 +37,7 @@ impl AppManifest {
     }
 
     pub fn get_installdir(&self, base_dir: &Path) -> Option<&Path> {
-        let installdir = &self.installdir()?;
+        let installdir = &base_dir.join(&self.installdir()?);
 
         if ! &installdir.is_dir() {
             return None
