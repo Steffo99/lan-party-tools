@@ -6,7 +6,7 @@ use clap;
 mod network;
 mod steam;
 
-
+/// The main function of the program, called when `lan-party-tools` is executed in a terminal.
 fn main() -> Result<(), &'static str> {
     let yaml = clap::load_yaml!("cli.yml");
     let app = clap::App::from_yaml(yaml).setting(clap::AppSettings::ArgRequiredElseHelp);

@@ -2,7 +2,14 @@ use reqwest;
 use systemstat;
 use systemstat::{IpAddr, Platform};
 
-
+/// Count the number of `true` most significative bits present in a `u8` slice.
+///
+/// Used to print the subnet masks returned by [`systemstat`] in the short `/XX` notation.
+///
+/// ```
+/// assert_eq!(count_octets(vec![255, 255, 255, 0]), 24);
+/// assert_eq!(count_octets(vec![255, 128, 0, 0], 9);
+/// ```
 fn count_octets(octets: &[u8]) -> u8 {
     let mut count: u8 = 0;
     for octet in octets {
@@ -21,6 +28,15 @@ fn count_octets(octets: &[u8]) -> u8 {
     count
 }
 
+/// Format a [`IpAddr`] as if it was a subnet mask.
+///
+/// ```
+/// let ipv4_addr = IpAddr::V4(systemstat::Ipv4Addr::new(255, 255, 255, 0));
+/// assert_eq!(fmt_net_mask(ipv4_addr), "/24");
+///
+/// let ipv6_addr = IpAddr::V6(systemstat::Ipv6Addr::new(0xFFFF, 0xFFFF, 0, 0, 0, 0, 0, 0));
+/// assert_eq!(fmt_net_mask(ipv6_addr), "/32");
+/// ```
 fn fmt_net_mask(ip: &IpAddr) -> String {
     match ip {
         IpAddr::Empty => format!("/__"),
@@ -30,6 +46,12 @@ fn fmt_net_mask(ip: &IpAddr) -> String {
     }
 }
 
+/// Format a [`IpAddr`] as if it was a regular IP address.
+///
+/// ```
+/// let ipv4_addr = IpAddr::V4(systemstat::Ipv4Addr::new(255, 255, 255, 0));
+/// assert_eq!(fmt_ip_addr(ipv4_addr), "255.255.255.0");
+/// ```
 fn fmt_ip_addr(ip: &IpAddr) -> String {
     match ip {
         IpAddr::Empty => format!("___"),
@@ -39,6 +61,7 @@ fn fmt_ip_addr(ip: &IpAddr) -> String {
     }
 }
 
+/// Format a [`systemstat::NetworkAddrs`] as if it was a IP address and subnet mask pair.
 fn fmt_net_addr(addrs: &systemstat::NetworkAddrs) -> String {
     let ip_string = fmt_ip_addr(&addrs.addr);
     let nm_string = fmt_net_mask(&addrs.netmask);
