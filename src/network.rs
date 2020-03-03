@@ -1,3 +1,5 @@
+//! The module handling `lan-party-tools network`.
+
 use reqwest;
 use systemstat;
 use systemstat::{IpAddr, Platform};
@@ -32,10 +34,10 @@ fn count_octets(octets: &[u8]) -> u8 {
 ///
 /// ```
 /// let ipv4_addr = IpAddr::V4(systemstat::Ipv4Addr::new(255, 255, 255, 0));
-/// assert_eq!(fmt_net_mask(ipv4_addr), "/24");
+/// assert_eq!(fmt_net_mask(&ipv4_addr), "/24");
 ///
 /// let ipv6_addr = IpAddr::V6(systemstat::Ipv6Addr::new(0xFFFF, 0xFFFF, 0, 0, 0, 0, 0, 0));
-/// assert_eq!(fmt_net_mask(ipv6_addr), "/32");
+/// assert_eq!(fmt_net_mask(&ipv6_addr), "/32");
 /// ```
 fn fmt_net_mask(ip: &IpAddr) -> String {
     match ip {
@@ -49,8 +51,8 @@ fn fmt_net_mask(ip: &IpAddr) -> String {
 /// Format a [`IpAddr`] as if it was a regular IP address.
 ///
 /// ```
-/// let ipv4_addr = IpAddr::V4(systemstat::Ipv4Addr::new(255, 255, 255, 0));
-/// assert_eq!(fmt_ip_addr(ipv4_addr), "255.255.255.0");
+/// let ipv4_addr = IpAddr::V4(systemstat::Ipv4Addr::new(192, 168, 1, 1));
+/// assert_eq!(fmt_ip_addr(&ipv4_addr), "192.168.1.1");
 /// ```
 fn fmt_ip_addr(ip: &IpAddr) -> String {
     match ip {
@@ -62,12 +64,28 @@ fn fmt_ip_addr(ip: &IpAddr) -> String {
 }
 
 /// Format a [`systemstat::NetworkAddrs`] as if it was a IP address and subnet mask pair.
+///
+/// ```
+/// let addrs = systemstat::NetworkAddrs {
+///    addr: IpAddr::V4(systemstat::Ipv4Addr::new(192, 168, 1, 1)),
+///    netmask: IpAddr::V4(systemstat::Ipv4Addr::new(255, 255, 255, 0))
+/// }
+/// assert_eq!(fmt_net_addr(&addr), "192.168.1.1/24");
+/// ```
 fn fmt_net_addr(addrs: &systemstat::NetworkAddrs) -> String {
     let ip_string = fmt_ip_addr(&addrs.addr);
     let nm_string = fmt_net_mask(&addrs.netmask);
     return format!("{}{}", &ip_string, &nm_string);
 }
 
+/// Decide if a certain IP address should be displayed when `lan-party-tools network` is called.
+///
+/// Loopback and link local addresses return `false`, while all other addresses return `true`.
+///
+/// ```
+/// assert_eq!(ip_addr_should_be_displayed(IpAddr::V4(systemstat::Ipv4Addr::new(192, 168, 1, 1))), true)
+/// assert_eq!(ip_addr_should_be_displayed(IpAddr::V4(systemstat::Ipv4Addr::new(127, 0, 0, 1))), false)
+/// ```
 fn ip_addr_should_be_displayed(ip_addr: &IpAddr) -> bool {
     match ip_addr {
         IpAddr::Empty => {return false},
@@ -89,6 +107,9 @@ fn ip_addr_should_be_displayed(ip_addr: &IpAddr) -> bool {
     true
 }
 
+/// Decide if a certain network should be displayed when `lan-party-tools network` is called.
+///
+/// It calls [`ip_addr_should_be_displayed`] on all IP addresses of the network, and returns `true` if any of them should be displayed.
 fn network_should_be_displayed(network: &systemstat::Network) -> bool {
     for network_addrs in &network.addrs {
         let ip_addr = &network_addrs.addr;
@@ -99,14 +120,17 @@ fn network_should_be_displayed(network: &systemstat::Network) -> bool {
     false
 }
 
+/// Syncronously fetches the public IPv4 address of the current network connection from [api.ipify.org](https://api.ipify.org/).
 fn fetch_public_ipv4() -> String {
     reqwest::blocking::get("https://api.ipify.org/").expect("Public IP request failed").text().expect("Could not parse Public IP response")
 }
 
+/// Syncronously fetches the public IPv6 address of the current network connection from [api6.ipify.org](https://api6.ipify.org/).
 fn fetch_public_ipv6() -> String {
     reqwest::blocking::get("https://api6.ipify.org/").expect("Public IP request failed").text().expect("Could not parse Public IP response")
 }
 
+/// The function that is run when `lan-party-tools network` is called.
 pub fn network_command() -> Result<(), &'static str> {
     let sys = systemstat::System::new();
     let networks = sys.networks().expect("Could not get networks.");

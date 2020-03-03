@@ -1,6 +1,9 @@
+//! The module handling `lan-party-tools steam`.
+
 pub mod appmanifest;
 pub mod steamapps;
 
+use std::io;
 use std::fs;
 use std::path::Path;
 use steamapps::SteamApps;
@@ -8,11 +11,11 @@ use clap;
 use fs_extra;
 use crate::steam::appmanifest::AppManifest;
 
-
-fn find_manifests_in_folder(folder: &Path) -> Vec<fs::DirEntry> {
+/// Find all manifests in the specified folder and return a [`Vec`] containing them as [`fs::DirEntry`]ies.
+fn find_manifests_in_folder(folder: &Path) -> io::Result<Vec<fs::DirEntry>> {
     let mut manifests: Vec<fs::DirEntry> = vec![];
-    for object in fs::read_dir(folder).expect("Could not open manifests folder") {
-        let object = object.expect("Could not get DirEntry for object");
+    for object in fs::read_dir(folder)? {
+        let object = object?;
 
         if !object.path().is_file() {
             continue;
@@ -24,13 +27,14 @@ fn find_manifests_in_folder(folder: &Path) -> Vec<fs::DirEntry> {
 
         manifests.push(object);
     };
-    return manifests;
+    Ok(manifests)
 }
 
+/// The function handling `lan-party-tools steam list`.
 pub fn steam_list_command(steamapps: Option<&str>) -> Result<(), &'static str> {
     let steamapps = SteamApps::from_console_input(&steamapps);
 
-    for manifest in find_manifests_in_folder(&steamapps.location) {
+    for manifest in find_manifests_in_folder(&steamapps.location).ok().ok_or("Could not find appmanifests")? {
         let path = &manifest.path();
         let manifest = appmanifest::AppManifest::new(&path).ok().ok_or("Could not read appmanifest")?;
         let appid = &manifest.appid().ok_or("Could not find appid")?;
@@ -41,6 +45,7 @@ pub fn steam_list_command(steamapps: Option<&str>) -> Result<(), &'static str> {
     Ok(())
 }
 
+/// Copy a `appmanifest_XXX.acf` file from a source to a destination.
 fn copy_manifest(from: &Path, to: &Path) -> Result<u64, fs_extra::error::Error> {
     fs_extra::copy_items(&vec![from], &to, &fs_extra::dir::CopyOptions {
         overwrite: true,
@@ -51,11 +56,17 @@ fn copy_manifest(from: &Path, to: &Path) -> Result<u64, fs_extra::error::Error> 
     })
 }
 
+/// Calculate the current file copy progress and return it in a format [`pbr`] can understand.
+///
+/// ```
+/// assert_eq!(progress_percentage(1, 2), 5000);
+/// assert_eq!(progress_percentage(1, 10000), 1);
+/// ```
 fn progress_percentage(num: u64, den: u64) -> u64 {
     return (((num as f64) / (den as f64)) * 10000f64) as u64;
 }
 
-
+/// Recursively copy the contents of a `installdir` from a source to a destination, and display a progress bar describing the copy status.
 fn copy_game_files(from: &Path, to: &Path, message: &str) -> Result<u64, fs_extra::error::Error> {
     let mut game_files_pb = pbr::ProgressBar::new(10000);
     game_files_pb.format("|█▓░|");
@@ -76,6 +87,7 @@ fn copy_game_files(from: &Path, to: &Path, message: &str) -> Result<u64, fs_extr
     result
 }
 
+/// The function handling `lan-party-tools steam backup`.
 pub fn steam_backup_command(
     steamapps: Option<&str>,
     destination: Option<&str>,
@@ -102,6 +114,7 @@ pub fn steam_backup_command(
     Ok(())
 }
 
+/// The function handling `lan-party-tools steam restore`.
 pub fn steam_restore_command(
     steamapps: Option<&str>,
     source: Option<&str>,
